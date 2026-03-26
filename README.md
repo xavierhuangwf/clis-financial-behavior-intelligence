@@ -2,6 +2,8 @@
 
 A modular analytics framework for behavioural risk detection, transaction intelligence, customer segmentation, and targeted intervention design in regulated financial environments.
 
+![Overall_workflow.png](./docs//Overall_workflow.png)
+
 This repository presents a reproducible machine learning pipeline for transforming high-volume transaction data into interpretable signals that can support early identification of disengagement risk, customer-behaviour understanding, and data-driven intervention strategies. Although demonstrated in a financial-services context, the system reflects broader design challenges common to regulated decision-support environments: large-scale behavioural data processing, interpretable modelling, modular deployment, and targeted action generation.
 
 ## Why This Matters
