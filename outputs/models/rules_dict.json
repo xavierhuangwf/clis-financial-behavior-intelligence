@@ -1,0 +1,211 @@
+{
+  "Amazon": [
+    "Coop Local",
+    "Topshop"
+  ],
+  "Blizzard": [
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Mojang Studios",
+    "Next",
+    "PureGym",
+    "SquareOnix",
+    "Umbro",
+    "Xbox"
+  ],
+  "Coop Local": [
+    "Blizzard",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Matalan",
+    "Mojang Studios",
+    "Next",
+    "River Island",
+    "Sainsbury",
+    "SquareOnix",
+    "TK Maxx",
+    "Topshop",
+    "Umbro",
+    "Xbox"
+  ],
+  "Daunt Books": [
+    "Blizzard",
+    "Coop Local",
+    "Mojang Studios",
+    "SquareOnix",
+    "Xbox"
+  ],
+  "Deliveroo": [
+    "Blizzard",
+    "Coop Local",
+    "Dorothy Perkins",
+    "JustEat",
+    "Matalan",
+    "Mojang Studios",
+    "Next",
+    "SquareOnix",
+    "TK Maxx",
+    "Umbro",
+    "Xbox"
+  ],
+  "Dorothy Perkins": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "JustEat",
+    "Matalan",
+    "Mojang Studios",
+    "Next",
+    "PureGym",
+    "SquareOnix",
+    "TK Maxx",
+    "Umbro",
+    "Xbox"
+  ],
+  "JustEat": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "Matalan",
+    "Mojang Studios",
+    "Next",
+    "SquareOnix",
+    "TK Maxx",
+    "Umbro",
+    "Xbox"
+  ],
+  "Matalan": [
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Next",
+    "TK Maxx"
+  ],
+  "Mojang Studios": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Next",
+    "PureGym",
+    "SquareOnix",
+    "Umbro",
+    "Xbox"
+  ],
+  "Netflix": [
+    "Blizzard",
+    "Coop Local",
+    "Mojang Studios",
+    "SquareOnix",
+    "Xbox"
+  ],
+  "Next": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Matalan",
+    "Mojang Studios",
+    "PureGym",
+    "River Island",
+    "Sainsbury",
+    "SquareOnix",
+    "TK Maxx",
+    "Topshop",
+    "Umbro",
+    "Xbox"
+  ],
+  "PureGym": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Mojang Studios",
+    "Next",
+    "SquareOnix",
+    "Umbro",
+    "Xbox"
+  ],
+  "River Island": [
+    "Coop Local",
+    "Next",
+    "Sainsbury"
+  ],
+  "Sainsbury": [
+    "Blizzard",
+    "Coop Local",
+    "Mojang Studios",
+    "River Island",
+    "SquareOnix",
+    "Xbox"
+  ],
+  "SquareOnix": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Mojang Studios",
+    "Next",
+    "Umbro",
+    "Xbox"
+  ],
+  "TK Maxx": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Matalan",
+    "Mojang Studios",
+    "Next",
+    "SquareOnix",
+    "Xbox"
+  ],
+  "Topshop": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Matalan",
+    "Mojang Studios",
+    "Next",
+    "SquareOnix",
+    "TK Maxx",
+    "Umbro",
+    "Xbox"
+  ],
+  "Umbro": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Mojang Studios",
+    "Next",
+    "PureGym",
+    "SquareOnix",
+    "Xbox"
+  ],
+  "Xbox": [
+    "Blizzard",
+    "Coop Local",
+    "Deliveroo",
+    "Dorothy Perkins",
+    "JustEat",
+    "Mojang Studios",
+    "Next",
+    "PureGym",
+    "SquareOnix",
+    "Umbro"
+  ]
+}
