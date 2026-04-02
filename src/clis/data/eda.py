@@ -1,239 +1,181 @@
-import pandas as pd
+from __future__ import annotations
+
+from pathlib import Path
+
 import matplotlib.pyplot as plt
-import re
-import numpy as np
+import pandas as pd
+
+from clis.data.preprocessing import preprocess_from_csv, filter_consumer_spending
 
 
-def load_and_visualize_excel(file_path):
-    try:
-        # Load the Excel file
-        df = pd.read_csv(file_path)
-        # Check if any data was loaded
-        if df.empty:
-            print("The Excel file is empty.")
-            return
+# Category labels aligned to the figures shown in the paper
+CATEGORY_MAPPING = {
+    "Groceries": ["COOP LOCAL", "SAINSBURY"],
+    "Eating": ["DELIVEROO", "JUSTEAT", "HARVESTER", "CHIQUITO", "ASK ITALIAN", "BILL'S"],
+    "Shopping": [
+        "NEXT", "TOPSHOP", "DOROTHY PERKINS", "MATALAN", "REEBOK", "RIVER ISLAND", "NIKE",
+        "ADIDAS", "NEW LOOK", "JD SPORTS", "MILLETS", "NORTH FACE", "UMBRO", "TK MAXX",
+        "HOBBY LOBBY", "HOBBYCRAFT", "ETSY", "A LIFE ON CANVAS", "FIVE SENSES ART",
+        "CRAFTASTIC", "BRILLIANT BRUSHES", "CASS ART", "STITCH BY STITCH",
+        "A YARN STORY", "SPORTS DIRECT", "AMAZON", "MOUNTAIN WAREHOUSE"
+    ],
+    "Entertainment": ["NETFLIX", "BLIZZARD", "XBOX", "MOJANG STUDIOS", "SQUAREONIX", "DISNEY", "GAME", "GAMESTATION", "CEX"],
+    "Fitness": ["PUREGYM", "GRAND UNION BJJ", "FOOTBALLPITCH"],
+    "Finance": ["HALIFAX", "LBG", "PREMIER FINANCE"],
+    "Personal Care": ["BOOTS", "LLOYDS PHARMACY", "REMEDY PLUS CARE"],
+    "Coffee Shops and Bars": [
+        "COFFEE REPUBLIC", "FULL OF BEANS", "AMT COFFEE", "COFFEE #1", "COSTA COFFEE",
+        "STARBUCKS", "THE ROYAL OAK", "RED LION", "KINGS ARMS", "ROSE & CROWN",
+        "THE CROWN", "WHITE HART"
+    ],
+    "Bookstore": ["BLACKWELL'S", "WATERSTONES", "FOYLES", "DAUNT BOOKS", "THE WORKS"],
+}
 
-        # Display the first few rows in the console
-        print("Excel Data Preview:")
-        print(df.head())
+CATEGORY_ORDER = [
+    "Shopping",
+    "Groceries",
+    "Entertainment",
+    "Eating",
+    "Fitness",
+    "Bookstore",
+    "Finance",
+    "Coffee Shops and Bars",
+    "Personal Care",
+]
 
-        # Check available column names
-        print(df.columns)
 
-        num_accounts = df["Account No"].nunique()
-        print(f"Total unique accounts: {num_accounts}")
+def ensure_output_dir(output_dir: str | Path) -> Path:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    return output_path
 
-        # Remove rows where 'Third Party Account No' is numeric
-        df = df[df["Third Party Account No"].isna()]
-        df = df[df["Amount"] < 0]
-        df["Amount"] = df["Amount"].abs()
 
-        num_accounts = df["Account No"].nunique()
-        print(f"Total unique accounts: {num_accounts}")
-        # Simple visualization: Plotting the first two numeric columns, if available
-        numeric_cols = df.select_dtypes(include=['number']).columns
-        if len(numeric_cols) >= 2:
+def apply_plot_style() -> None:
+    plt.style.use("ggplot")
+    plt.rcParams.update({
+        "figure.figsize": (12, 7),
+        "axes.titlesize": 12,
+        "axes.labelsize": 11,
+        "xtick.labelsize": 9,
+        "ytick.labelsize": 9,
+        "legend.fontsize": 9,
+    })
 
-            # Plot histogram with only negative transaction amounts
-            plt.figure(figsize=(12, 12))
-            plt.hist(df["Amount"], bins=50, edgecolor='black', log=True)
-            plt.xlabel("Transaction Amount (£)")
-            plt.ylabel("Frequency (Log Scale)")
-            plt.title("Distribution of Transaction Amounts (Filtered for Numeric Third Party Account No)")
-            plt.grid(axis="y", linestyle="--", alpha=0.7)
 
-            # Save and show the plot
-            plt.savefig("filtered_transaction_amounts.png", dpi=300, bbox_inches='tight')
-            plt.show()
+def categorize_transaction(merchant: object) -> str:
+    merchant = str(merchant).upper().strip()
+    for category, keywords in CATEGORY_MAPPING.items():
+        if any(keyword in merchant for keyword in keywords):
+            return category
+    return "General"
 
-            # Define threshold for small payments
-            small_payment_threshold = 250
 
-            # Count transactions below and above the threshold
-            small_payments = df[df["Amount"] < 250].shape[0]
-            large_payments = df[df["Amount"] >= 250].shape[0]
+def add_spending_category(df: pd.DataFrame) -> pd.DataFrame:
+    tmp = df.copy()
+    tmp["Spending Category"] = tmp["Third Party Name"].apply(categorize_transaction)
+    return tmp
 
-            # Prepare data for pie chart
-            sizes = [small_payments, large_payments]
-            labels = ["Small Payments (< £250)", "Large Payments (≥ £250)"]
-            colors = ["lightblue", "orange"]
 
-            # Plot pie chart
-            plt.figure(figsize=(7, 7))
-            plt.pie(sizes, labels=labels, autopct="%1.1f%%", colors=colors, startangle=140,
-                    wedgeprops={'edgecolor': 'black'})
-            plt.title("Share of Small Payments in Transaction Amounts")
-            plt.savefig("Share of Small Payments in Transaction Amounts.png", dpi=300,
-                        bbox_inches='tight')  # Save as PNG
-            plt.show()
+def _add_bar_labels(ax, offset_ratio: float = 0.01) -> None:
+    heights = [bar.get_height() for bar in ax.patches]
+    if not heights:
+        return
+    max_height = max(heights)
+    offset = max_height * offset_ratio
 
-            # Define bins for transaction amounts (each £250)
-            bins = list(range(0, int(df["Amount"].max()) + 250, 250))
+    for bar in ax.patches:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + offset,
+            f"{int(height):,}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            fontweight="bold",
+        )
 
-            # Generate labels
-            labels = [f"£{bins[i]} - £{bins[i + 1]}" for i in range(len(bins) - 1)]
 
-            # Categorize transactions into bins
-            df["amount_category"] = pd.cut(df["Amount"], bins=bins, labels=labels, right=False)
+def plot_total_spending_by_category(df: pd.DataFrame, output_dir: str | Path) -> None:
+    output_dir = ensure_output_dir(output_dir)
 
-            # Count transactions in each category
-            category_counts = df["amount_category"].value_counts().sort_index()
+    tmp = add_spending_category(df)
+    category_spending = (
+        tmp.groupby("Spending Category")["Amount"]
+        .sum()
+        .reindex(CATEGORY_ORDER + ["General"])
+        .dropna()
+    )
 
-            # Calculate percentages for legend
-            percentages = category_counts / category_counts.sum() * 100
-            legend_labels = [f"{label}: {percent:.1f}%" for label, percent in zip(category_counts.index, percentages)]
+    plt.figure(figsize=(12, 8))
+    ax = category_spending.plot(kind="bar", color="orange", edgecolor="black")
+    plt.title("Total Spending by Category")
+    plt.xlabel("Spending Category")
+    plt.ylabel("Total Amount Spent (£)")
+    plt.xticks(rotation=45, ha="right")
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+    _add_bar_labels(ax)
+    plt.tight_layout()
+    plt.savefig(output_dir / "spending_by_category.png", dpi=300)
+    plt.close()
 
-            # # Plot pie chart
-            plt.figure(figsize=(12, 8))
-            wedges, texts = plt.pie(category_counts, startangle=140, wedgeprops={'edgecolor': 'black'})
 
-            # Add legend with percentages
-            plt.legend(wedges, legend_labels, title="Transaction Ranges", loc="center left", bbox_to_anchor=(1, 0.5))
+def plot_transaction_frequency_by_category(df: pd.DataFrame, output_dir: str | Path) -> None:
+    output_dir = ensure_output_dir(output_dir)
 
-            # Add title
-            plt.title("Transaction Amount Distribution by £250 Intervals")
+    tmp = add_spending_category(df)
+    category_counts = (
+        tmp["Spending Category"]
+        .value_counts()
+        .reindex(CATEGORY_ORDER + ["General"])
+        .dropna()
+    )
 
-            plt.savefig("Transaction Amount Distribution by £250 Intervals.png", dpi=300,
-                        bbox_inches='tight')  # Save as PNG
+    plt.figure(figsize=(12, 8))
+    ax = category_counts.plot(kind="bar", color="orange", edgecolor="black")
+    plt.title("Transaction Frequency by Category")
+    plt.xlabel("Spending Category")
+    plt.ylabel("Number of Transactions")
+    plt.xticks(rotation=45, ha="right")
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+    _add_bar_labels(ax)
+    plt.tight_layout()
+    plt.savefig(output_dir / "transaction_frequency_by_category.png", dpi=300)
+    plt.close()
 
-            # Show plot
-            plt.show()
 
-            ################################################################
+def plot_filtered_transaction_amounts(df: pd.DataFrame, output_dir: str | Path) -> None:
+    output_dir = ensure_output_dir(output_dir)
 
-            # Plot: Top 10 Most Frequent Transaction Recipients ################################################################
-            top_merchants = df["Third Party Name"].value_counts().head(10)
+    plt.figure(figsize=(12, 8))
+    plt.hist(df["Amount"], bins=50, edgecolor="black", log=True)
+    plt.xlabel("Transaction Amount (£)")
+    plt.ylabel("Frequency (Log Scale)")
+    plt.title("Distribution of Transaction Amounts (Filtered for Numeric Third Party Account No)")
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+    plt.tight_layout()
+    plt.savefig(output_dir / "filtered_transaction_amounts.png", dpi=300)
+    plt.close()
 
-            plt.figure(figsize=(14, 20))
-            top_merchants.plot(kind="bar", color='blue', edgecolor='black')
-            plt.xlabel("Merchant")
-            plt.ylabel("Transaction Count")
-            plt.title("Top 10 Most Frequent Transaction Recipients")
-            plt.xticks(rotation=45, ha="right")
-            plt.savefig("top_10_frequent_recipients.png", dpi=300, bbox_inches='tight')  # Save as PNG
-            plt.show()
 
-            # Extract unique transaction recipients
-            unique_recipients = df["Third Party Name"].unique()
+def generate_paper_figures(input_csv: str | Path, output_dir: str | Path) -> pd.DataFrame:
+    apply_plot_style()
 
-            # Function to check if a string is purely numeric
-            def is_numeric(value):
-                return bool(re.fullmatch(r"\d+", str(value).strip()))  # Strictly match full numeric strings
+    cleaned = preprocess_from_csv(input_csv)
+    spending = filter_consumer_spending(cleaned)
 
-            # Filter out numeric values
-            filtered_recipients = [recipient for recipient in unique_recipients if not is_numeric(recipient)]
+    plot_total_spending_by_category(spending, output_dir)
+    plot_transaction_frequency_by_category(spending, output_dir)
+    plot_filtered_transaction_amounts(spending, output_dir)
 
-            # Display the first 20 unique filtered recipients (for preview)
-            print(filtered_recipients[:20])  # Adjust the number as needed
-
-            # Save to a text file for further analysis (optional)
-            with open("filtered_unique_recipients.txt", "w") as f:
-                for recipient in filtered_recipients:
-                    f.write(f"{recipient}\n")
-
-            print(f"Total unique transaction recipients (excluding numbers): {len(filtered_recipients)}")
-
-            # Define category mappings
-            category_mapping = {
-                "Groceries": ["COOP LOCAL", "SAINSBURY"],
-                "Eating": ["DELIVEROO", "JUSTEAT", "HARVESTER", "CHIQUITO", "ASK ITALIAN", "BILL'S"],
-                "Shopping": ["NEXT", "TOPSHOP", "DOROTHY PERKINS", "MATALAN", "REEBOK", "RIVER ISLAND", "NIKE",
-                             "ADIDAS", "NEW LOOK"],
-                "Entertainment": ["NETFLIX", "BLIZZARD", "XBOX", "MOJANG STUDIOS", "SQUAREONIX", "DISNEY", "GAME",
-                                  "GAMESTATION", "CEX"],
-                "Fitness": ["PUREGYM", "GRAND UNION BJJ", "FOOTBALLPITCH"],
-                "Finances": ["HALIFAX", "LBG", "PREMIER FINANCE"],
-                "Personal Care": ["BOOTS", "LLOYDS PHARMACY", "REMEDY PLUS CARE"],
-                "Coffee Shops": ["COFFEE REPUBLIC", "FULL OF BEANS", "AMT COFFEE", "COFFEE #1", "COSTA COFFEE",
-                                 "STARBUCKS", "THE ROYAL OAK"],
-                "Bookstore": ["BLACKWELL'S", "WATERSTONES", "FOYLES", "DAUNT BOOKS", "THE WORKS"]
-            }
-
-            # Function to assign categories based on keywords in the merchant name
-            def categorize_transaction(merchant):
-                merchant = str(merchant).upper()  # Convert to uppercase for matching
-                for category, keywords in category_mapping.items():
-                    if any(keyword in merchant for keyword in keywords):
-                        return category
-                # return "Unknown"  # Default category
-                return None
-
-            # Apply categorization
-            df["category"] = df["Third Party Name"].apply(categorize_transaction)
-
-            # Sum transaction amounts by category
-            category_spending = df.groupby("category")["Amount"].sum().sort_values(ascending=False)
-
-            # Plot bar chart
-            plt.figure(figsize=(14, 14))
-            bars = category_spending.plot(kind="bar", color="orange", edgecolor="black")
-
-            # category_spending.plot(kind="bar", color="skyblue", edgecolor="black",log=False)
-            plt.xlabel("Spending Category", fontsize=12)
-            plt.ylabel("Total Amount Spent (£)", fontsize=12)
-            plt.title("Total Spending by Category", fontsize=12)
-            plt.xticks(rotation=45, ha="right", fontsize=12)
-            plt.grid(axis="y", linestyle="--", alpha=0.7)
-
-            # Add number labels on bars
-            for bar in bars.patches:
-                plt.text(bar.get_x() + bar.get_width() / 2,  # X position (center of bar)
-                         bar.get_height() + 900,  # Y position (above the bar)
-                         f"{int(bar.get_height()):,}",  # Format number with commas
-                         ha="center", va="center", fontsize=12, fontweight="bold")
-
-            # Save chart as an image (optional)
-            plt.savefig("spending_by_category.png", dpi=300, bbox_inches='tight')
-            # Show the plot
-            plt.show()
-
-            # Count the number of transactions per category
-            category_counts = df["category"].value_counts().sort_values(ascending=False)
-
-            # Plot bar chart
-            plt.figure(figsize=(14, 14))
-            bars = category_counts.plot(kind="bar", color="orange", edgecolor="black")
-
-            # category_counts.plot(kind="bar", color="orange", edgecolor="black")
-            plt.xlabel("Spending Category")
-            plt.ylabel("Number of Transactions")
-            plt.title("Transaction Frequency by Category")
-            plt.xticks(rotation=45, ha="right")
-            plt.grid(axis="y", linestyle="--", alpha=0.7)
-
-            # Add number labels on bars
-            for bar in bars.patches:
-                plt.text(bar.get_x() + bar.get_width() / 2,  # X position (center of bar)
-                         bar.get_height() + 600,  # Y position (above the bar)
-                         f"{int(bar.get_height()):,}",  # Format number with commas
-                         ha="center", va="center", fontsize=10, fontweight="bold")
-
-            # Save chart as an image (optional)
-            plt.savefig("transaction_frequency_by_category.png", dpi=300, bbox_inches='tight')
-
-            # Show the plot
-            plt.show()
-            ################################################################
-
-            # Plot: Transaction Volume Over Time################################################################
-            # transactions_over_time = df.groupby("Date").size()
-            #
-            # plt.figure(figsize=(12, 5))
-            # transactions_over_time.plot(color='green', marker='o', linestyle='-')
-            # plt.xlabel("Date")
-            # plt.ylabel("Number of Transactions")
-            # plt.title("Transaction Volume Over Time")
-            # plt.xticks(rotation=45)
-            # plt.savefig("transaction_volume_over_time.png", dpi=300, bbox_inches='tight')  # Save as PNG
-            # plt.show()
-            ################################################################
-
-        else:
-            print("Not enough numeric data available for visualization.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    return spending
 
 
 if __name__ == "__main__":
-    # load_and_visualize_excel("dataset/fake_transactional_dataset_1.csv")
-    load_and_visualize_excel("dataset/simulated_fake_transactions_dataset_2.csv")
+    project_root = Path(__file__).resolve().parents[3]
+    input_csv = project_root / "data" / "raw" / "simulated_fake_transactions_dataset_2.csv"
+    output_dir = project_root / "outputs" / "figures" / "eda"
+
+    spending_df = generate_paper_figures(input_csv, output_dir)
+    print(spending_df.head())
+    print(spending_df.shape)
