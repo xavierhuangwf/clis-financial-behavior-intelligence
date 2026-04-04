@@ -9,7 +9,12 @@ import pandas as pd
 
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+)
 from sklearn.model_selection import learning_curve, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -59,7 +64,7 @@ def build_model() -> Pipeline:
     )
 
     model = RandomForestClassifier(
-        n_estimators=300,
+        n_estimators=100,
         random_state=42,
         n_jobs=-1,
         class_weight="balanced_subsample",
@@ -83,14 +88,18 @@ def plot_confusion_matrix_figure(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    plt.figure(figsize=(10, 8))
     cm = confusion_matrix(y_true, y_pred, labels=sorted(pd.unique(y_true)))
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=sorted(pd.unique(y_true)))
-    disp.plot(cmap="Blues", xticks_rotation=45)
-    plt.title("Random Forest Transaction Categorization - Confusion Matrix")
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    plt.close()
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=cm,
+        display_labels=sorted(pd.unique(y_true)),
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    disp.plot(cmap="Blues", xticks_rotation=45, ax=ax, colorbar=False)
+    ax.set_title("Random Forest Transaction Categorization - Confusion Matrix")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300)
+    plt.close(fig)
 
 
 def plot_learning_curve_figure(
@@ -119,20 +128,39 @@ def plot_learning_curve_figure(
     val_mean = val_scores.mean(axis=1)
     val_std = val_scores.std(axis=1)
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(train_sizes, train_mean, marker="o", color="red", label="Training score")
-    plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, alpha=0.2, color="red")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(train_sizes, train_mean, marker="o", color="red", label="Training score")
+    ax.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, alpha=0.2, color="red")
 
-    plt.plot(train_sizes, val_mean, marker="o", color="green", label="Cross-validation score")
-    plt.fill_between(train_sizes, val_mean - val_std, val_mean + val_std, alpha=0.2, color="green")
+    ax.plot(train_sizes, val_mean, marker="o", color="green", label="Cross-validation score")
+    ax.fill_between(train_sizes, val_mean - val_std, val_mean + val_std, alpha=0.2, color="green")
 
-    plt.xlabel("Training examples")
-    plt.ylabel("Score")
-    plt.title("Learning Curves (Random Forest)")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    plt.close()
+    ax.set_xlabel("Training examples")
+    ax.set_ylabel("Score")
+    ax.set_title("Learning Curves (Random Forest)")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300)
+    plt.close(fig)
+
+
+def save_model_with_verification(model: Pipeline, model_output_path: str | Path) -> None:
+    model_output_path = Path(model_output_path)
+    model_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # compress to reduce file size and write more robustly
+    joblib.dump(model, model_output_path, compress=3)
+
+    if not model_output_path.exists() or model_output_path.stat().st_size == 0:
+        raise RuntimeError(f"Model file was not written correctly: {model_output_path}")
+
+    # immediate reload check
+    reloaded_model = joblib.load(model_output_path)
+    if reloaded_model is None:
+        raise RuntimeError("Model reload verification failed.")
+
+    print(f"Model saved and verified: {model_output_path}")
+    print(f"Model size: {model_output_path.stat().st_size / (1024 * 1024):.2f} MB")
 
 
 def train_random_forest_pipeline(
@@ -164,9 +192,7 @@ def train_random_forest_pipeline(
     print(f"Accuracy: {accuracy:.4f}")
     print(report)
 
-    model_output_path = Path(model_output_path)
-    model_output_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, model_output_path)
+    save_model_with_verification(model, model_output_path)
 
     figure_dir = Path(figure_dir)
     figure_dir.mkdir(parents=True, exist_ok=True)

@@ -9,6 +9,31 @@ from clis.data.preprocessing import preprocess_from_csv, filter_consumer_spendin
 from clis.categorization.train_random_forest import add_temporal_features, FEATURE_COLUMNS
 
 
+def load_trained_model(model_path: str | Path):
+    model_path = Path(model_path)
+
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"Model file not found: {model_path}\n"
+            f"Run 'python -m clis.categorization.train_random_forest' first."
+        )
+
+    if model_path.stat().st_size == 0:
+        raise RuntimeError(f"Model file is empty: {model_path}")
+
+    try:
+        model = joblib.load(model_path)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load model file: {model_path}\n"
+            f"This usually means the .joblib file is corrupted or incomplete.\n"
+            f"Delete it, retrain the model, and try again.\n"
+            f"Original error: {e}"
+        ) from e
+
+    return model
+
+
 def predict_transaction_categories(
     input_csv: str | Path,
     model_path: str | Path,
@@ -17,7 +42,7 @@ def predict_transaction_categories(
     spending = filter_consumer_spending(cleaned)
     featured = add_temporal_features(spending)
 
-    model = joblib.load(model_path)
+    model = load_trained_model(model_path)
     featured["Predicted category"] = model.predict(featured[FEATURE_COLUMNS])
 
     return featured
