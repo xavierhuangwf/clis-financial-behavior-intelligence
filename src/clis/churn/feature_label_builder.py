@@ -1,152 +1,247 @@
-from datetime import datetime
+from __future__ import annotations
 
-import dataPreparation as dp
-import pandas as pd
-import numpy as np
-import seaborn as sns
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import pandas as pd
+
+from clis.data.preprocessing import preprocess_from_csv, filter_consumer_spending
 
 
-# define a threshold, return the churn label
-def set_thresholds(user_3m_row, overall_3m_row):
-    threshold = ((user_3m_row['total_spending_3m'] < overall_3m_row['overall_avg_total_amount'] * 0.7) &
-                 (user_3m_row['total_visits_3m'] < overall_3m_row['overall_avg_total_visits'] * 0.7)) | \
-                (user_3m_row['recency'] > 30 &
-                 (user_3m_row['total_spending_3m'] < overall_3m_row['overall_avg_total_amount'] * 0.8) &
-                 (user_3m_row['total_visits_3m'] < overall_3m_row['overall_avg_total_visits'] * 0.8))
-    return threshold.iloc[0]
+WINDOW_SIZE = 3
+
+ID_COLUMNS = ["Account No", "start_month", "end_month"]
+FEATURE_COLUMNS = [
+    "total_spending_3m",
+    "avg_spending_per_m",
+    "std_spending_per_m",
+    "total_visits_3m",
+    "avg_visits_per_m",
+    "recency",
+]
+LABEL_COLUMN = "churn_label"
 
 
-# fill in 0 for months with no consumptions for each user
-def fill_missing_months(monthly_features):
-    start_month = '2025-1'
-    end_month = '2025-12'
-    time_format = "%Y-%m"
-    all_months = pd.period_range(datetime.strptime(start_month, time_format),
-                                 datetime.strptime(end_month, time_format), freq='M')
-
-    all_users = monthly_features['Account No'].unique()
-
-    full_index = pd.MultiIndex.from_product([all_users, all_months],
-                                            names=['Account No', 'YearMonth'])
-
-    monthly_features = monthly_features.set_index(['Account No', 'YearMonth'])
-    monthly_features = monthly_features.reindex(full_index, fill_value=0).reset_index()
-
-    return monthly_features
+def load_consumer_spending(input_csv: str | Path) -> pd.DataFrame:
+    cleaned = preprocess_from_csv(input_csv)
+    spending = filter_consumer_spending(cleaned).copy()
+    spending["YearMonth"] = spending["Datetime"].dt.to_period("M")
+    return spending
 
 
-def extract_3m_data(monthly_data, window_size, original_df):
-    train_data = []
+def build_monthly_features(spending_df: pd.DataFrame) -> pd.DataFrame:
+    monthly = (
+        spending_df.groupby(["Account No", "YearMonth"])
+        .agg(
+            total_amount=("Amount", "sum"),
+            frequency=("Amount", "count"),
+        )
+        .reset_index()
+    )
+    return monthly
 
-    for account_no, user_data in monthly_data.groupby('Account No'):
-        user_data = user_data.sort_values(by='YearMonth')
-        full_user_data = original_df[original_df['Account No'] == account_no].sort_values(by='Datetime')
 
-        for i in range(12 - window_size + 1):
-            feature_window = user_data.iloc[i:i + window_size]
-            target_month = feature_window.iloc[-1]['YearMonth']
-            # recency
-            last_purchase_date = full_user_data[full_user_data['Datetime'].dt.to_period('M') <= target_month][
-                'Datetime'].max()
+def fill_missing_months(monthly_features: pd.DataFrame) -> pd.DataFrame:
+    if monthly_features.empty:
+        return monthly_features.copy()
 
-            if pd.isna(last_purchase_date):  # no consumption history
+    all_months = pd.period_range(
+        monthly_features["YearMonth"].min(),
+        monthly_features["YearMonth"].max(),
+        freq="M",
+    )
+    all_users = monthly_features["Account No"].unique()
+
+    full_index = pd.MultiIndex.from_product(
+        [all_users, all_months],
+        names=["Account No", "YearMonth"],
+    )
+
+    filled = (
+        monthly_features.set_index(["Account No", "YearMonth"])
+        .reindex(full_index, fill_value=0)
+        .reset_index()
+    )
+    return filled
+
+
+def extract_rolling_features(
+    monthly_data: pd.DataFrame,
+    original_spending_df: pd.DataFrame,
+    window_size: int = WINDOW_SIZE,
+) -> pd.DataFrame:
+    rows = []
+
+    original_spending_df = original_spending_df.copy()
+    original_spending_df["YearMonth"] = original_spending_df["Datetime"].dt.to_period("M")
+
+    for account_no, user_data in monthly_data.groupby("Account No"):
+        user_data = user_data.sort_values("YearMonth").reset_index(drop=True)
+        user_history = (
+            original_spending_df.loc[original_spending_df["Account No"] == account_no]
+            .sort_values("Datetime")
+            .copy()
+        )
+
+        for i in range(len(user_data) - window_size + 1):
+            window = user_data.iloc[i : i + window_size]
+            target_month = window.iloc[-1]["YearMonth"]
+
+            relevant_history = user_history.loc[user_history["YearMonth"] <= target_month]
+            last_purchase_date = relevant_history["Datetime"].max()
+
+            if pd.isna(last_purchase_date):
                 recency = 999
             else:
-                recency = (pd.Period(target_month, freq='M').end_time.date() - last_purchase_date.date()).days
+                target_month_end = target_month.end_time.date()
+                recency = (target_month_end - last_purchase_date.date()).days
 
-            features = {
-                'Account No': account_no,
-                'start_month': feature_window.iloc[0]['YearMonth'],
-                'end_month': feature_window.iloc[-1]['YearMonth'],
-                'total_spending_3m': feature_window['total_amount'].sum(),
-                'avg_spending_per_m': feature_window['total_amount'].mean(),
-                'std_spending_per_m': feature_window['total_amount'].std(),
-                'total_visits_3m': feature_window['frequency'].sum(),
-                'avg_visits_per_m': feature_window['frequency'].mean(),
-                'recency': recency
+            row = {
+                "Account No": account_no,
+                "start_month": str(window.iloc[0]["YearMonth"]),
+                "end_month": str(window.iloc[-1]["YearMonth"]),
+                "total_spending_3m": float(window["total_amount"].sum()),
+                "avg_spending_per_m": float(window["total_amount"].mean()),
+                "std_spending_per_m": float(window["total_amount"].std(ddof=0)),
+                "total_visits_3m": float(window["frequency"].sum()),
+                "avg_visits_per_m": float(window["frequency"].mean()),
+                "recency": int(recency),
             }
-            train_data.append(features)
+            rows.append(row)
 
-    return pd.DataFrame(train_data)
+    features = pd.DataFrame(rows)
+    if not features.empty:
+        features["std_spending_per_m"] = features["std_spending_per_m"].fillna(0.0)
 
-
-def filter_stable_users(tmp_features):
-    stable_features = tmp_features.drop(tmp_features[(tmp_features['total_visits_3m'] < 3) |
-                                                     (tmp_features['recency'] > 60)].index)
-    return stable_features
+    return features
 
 
-def get_every3m_overall_data(all_features):
-    overall_features = pd.DataFrame(columns=['start_month', 'end_month',
-                                             'overall_avg_total_amount', 'overall_avg_total_visits'])
-    for i, group_3m in all_features.groupby(['start_month', 'end_month']):
-        curr_row = [group_3m['start_month'].iloc[0], group_3m['end_month'].iloc[0],
-                    group_3m['total_spending_3m'].mean(), group_3m['total_visits_3m'].mean()]
-        overall_features.loc[len(overall_features)] = curr_row
-    return pd.DataFrame(overall_features)
+def filter_stable_users(features_df: pd.DataFrame) -> pd.DataFrame:
+    stable = features_df.loc[
+        (features_df["total_visits_3m"] >= 3) & (features_df["recency"] <= 60)
+    ].copy()
+    return stable.reset_index(drop=True)
 
 
-def get_features_labels(file_path):
-    # data cleaning (drop null, duplicated and abnormal)
-    df = pd.read_csv(file_path)
-    df = dp.preprocess(df)
-    # print(df.info())
-
-    # filter consumption records with third party names
-    df_consume = df.drop(df[(df['Amount'] > 0) | (pd.isna(df['Third Party Name']))].index)
-    df_consume = df_consume.drop(columns='Third Party Account No')
-    df_consume["Amount"] = -df_consume["Amount"]
-
-    # find consumption features for each third party
-    df_consume['YearMonth'] = df_consume['Datetime'].dt.to_period('M')
-
-    user_monthly_features = df_consume.groupby(['Account No', 'YearMonth']).agg(
-        total_amount=('Amount', 'sum'),  # total spending per month
-        frequency=('Amount', 'count'),  # total visits per month
-    ).reset_index()
-    user_monthly_features = fill_missing_months(user_monthly_features)
-    user_monthly_features.fillna(0, inplace=True)
-
-    three_months_features = extract_3m_data(user_monthly_features, 3, df_consume)
-    three_months_features = filter_stable_users(three_months_features)
-    three_months_overall_features = get_every3m_overall_data(three_months_features)
-
-    three_months_features['churn_label'] = 0
-    for index, row in three_months_features.iterrows():
-        overall_row = three_months_overall_features[(three_months_overall_features['start_month'] == row['start_month'])
-                                                    & (three_months_overall_features['end_month'] == row['end_month'])]
-        churn = set_thresholds(row, overall_row)
-        three_months_features.at[index, 'churn_label'] = int(churn)
-
-    churn_per = three_months_features['churn_label'].mean()
-    print("churn percentage: ", churn_per)
-    print("three_months_features: ", three_months_features)
-    return three_months_features
+def build_overall_window_baselines(features_df: pd.DataFrame) -> pd.DataFrame:
+    baselines = (
+        features_df.groupby(["start_month", "end_month"])
+        .agg(
+            overall_avg_total_amount=("total_spending_3m", "mean"),
+            overall_avg_total_visits=("total_visits_3m", "mean"),
+        )
+        .reset_index()
+    )
+    return baselines
 
 
-path = "../../simulated_fake_transactions_dataset_2.csv"
-three_months_features = get_features_labels(path)
-sns.histplot(three_months_features[three_months_features['churn_label'] == 1]['total_spending_3m'], kde=True,
-             color='red', label='Churn')
-sns.histplot(three_months_features[three_months_features['churn_label'] == 0]['total_spending_3m'], kde=True,
-             color='blue', label='Non-Churn')
-plt.legend()
-plt.title('Churn vs. Non-Churn Monetary Distribution')
-plt.show()
+def set_churn_label(user_row: pd.Series, overall_row: pd.Series) -> int:
+    low_engagement = (
+        (user_row["total_spending_3m"] < overall_row["overall_avg_total_amount"] * 0.7)
+        and (user_row["total_visits_3m"] < overall_row["overall_avg_total_visits"] * 0.7)
+    )
 
-sns.histplot(three_months_features[three_months_features['churn_label'] == 1]['recency'], kde=True,
-             color='red', label='Churn')
-sns.histplot(three_months_features[three_months_features['churn_label'] == 0]['recency'], kde=True,
-             color='blue', label='Non-Churn')
-plt.legend()
-plt.title('Churn vs. Non-Churn Recency Distribution')
-plt.show()
+    inactivity_with_decline = (
+        (user_row["recency"] > 30)
+        and (user_row["total_spending_3m"] < overall_row["overall_avg_total_amount"] * 0.8)
+        and (user_row["total_visits_3m"] < overall_row["overall_avg_total_visits"] * 0.8)
+    )
 
-sns.histplot(three_months_features[three_months_features['churn_label'] == 1]['total_visits_3m'], kde=True,
-             color='red', label='Churn')
-sns.histplot(three_months_features[three_months_features['churn_label'] == 0]['total_visits_3m'], kde=True,
-             color='blue', label='Non-Churn')
-plt.legend()
-plt.title('Churn vs. Non-Churn Frequency Distribution')
-plt.show()
+    return int(low_engagement or inactivity_with_decline)
+
+
+def assign_churn_labels(features_df: pd.DataFrame) -> pd.DataFrame:
+    baselines = build_overall_window_baselines(features_df)
+
+    merged = features_df.merge(
+        baselines,
+        on=["start_month", "end_month"],
+        how="left",
+    ).copy()
+
+    merged[LABEL_COLUMN] = merged.apply(
+        lambda row: set_churn_label(row, row),
+        axis=1,
+    )
+
+    return merged[ID_COLUMNS + FEATURE_COLUMNS + [LABEL_COLUMN]].copy()
+
+
+def build_features_labels_table(input_csv: str | Path) -> pd.DataFrame:
+    spending = load_consumer_spending(input_csv)
+    monthly = build_monthly_features(spending)
+    monthly_filled = fill_missing_months(monthly)
+    rolling = extract_rolling_features(monthly_filled, spending, window_size=WINDOW_SIZE)
+    stable = filter_stable_users(rolling)
+    labeled = assign_churn_labels(stable)
+    return labeled
+
+
+def save_features_labels_table(df: pd.DataFrame, output_csv: str | Path) -> Path:
+    output_csv = Path(output_csv)
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_csv, index=False)
+    return output_csv
+
+
+def _plot_distribution(
+    df: pd.DataFrame,
+    feature_name: str,
+    title: str,
+    output_path: str | Path,
+) -> None:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    churned = df.loc[df[LABEL_COLUMN] == 1, feature_name]
+    non_churned = df.loc[df[LABEL_COLUMN] == 0, feature_name]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.hist(churned, bins=30, alpha=0.6, label="Churn", color="red")
+    ax.hist(non_churned, bins=30, alpha=0.6, label="Non-Churn", color="blue")
+    ax.set_title(title)
+    ax.set_xlabel(feature_name)
+    ax.set_ylabel("Count")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300)
+    plt.close(fig)
+
+
+def save_diagnostic_figures(df: pd.DataFrame, figure_dir: str | Path) -> None:
+    figure_dir = Path(figure_dir)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+
+    _plot_distribution(
+        df,
+        "total_spending_3m",
+        "Churn vs. Non-Churn Monetary Distribution",
+        figure_dir / "churn_vs_nonchurn_monetary_distribution.png",
+    )
+    _plot_distribution(
+        df,
+        "recency",
+        "Churn vs. Non-Churn Recency Distribution",
+        figure_dir / "churn_vs_nonchurn_recency_distribution.png",
+    )
+    _plot_distribution(
+        df,
+        "total_visits_3m",
+        "Churn vs. Non-Churn Frequency Distribution",
+        figure_dir / "churn_vs_nonchurn_frequency_distribution.png",
+    )
+
+
+if __name__ == "__main__":
+    project_root = Path(__file__).resolve().parents[3]
+    input_csv = project_root / "data" / "raw" / "simulated_fake_transactions_dataset_2.csv"
+    output_csv = project_root / "data" / "processed" / "churn_features_labels.csv"
+    figure_dir = project_root / "outputs" / "figures" / "churn"
+
+    features_labels_df = build_features_labels_table(input_csv)
+    save_features_labels_table(features_labels_df, output_csv)
+    save_diagnostic_figures(features_labels_df, figure_dir)
+
+    print(features_labels_df.head())
+    print(features_labels_df[LABEL_COLUMN].value_counts(normalize=True))
+    print(f"Saved features/labels to: {output_csv}")
