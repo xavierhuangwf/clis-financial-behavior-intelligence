@@ -1,107 +1,205 @@
 # CLIS: Financial Behavior Intelligence
 
-A modular analytics framework for behavioural signal analysis, transaction intelligence, customer segmentation, and intervention-oriented decision support in regulated financial environments.
+A modular analytics framework for behavioural signal analysis, transaction intelligence, customer-risk modelling, customer segmentation, and intervention-oriented decision support in regulated financial environments.
 
 ![Overall Workflow](./docs/Overall_workflow.png)
 
 ## Overview
 
-This repository presents a refactored implementation of the Customer Loyalty Improvement System (CLIS), originally developed as a modular analytics pipeline for transforming transaction data into actionable behavioural insights. In a financial-services setting, the system supports data cleaning, spending analysis, expenditure categorisation, customer-risk modelling, segmentation, and cashback-oriented recommendation design.
+This repository presents a refactored implementation of the Customer Loyalty Improvement System (CLIS), originally developed as a modular analytics pipeline for transforming transaction data into actionable behavioural insights. In a financial-services setting, the system supports transaction cleaning, spending analysis, expenditure categorisation, churn modelling, customer segmentation, and prototype intervention logic.
 
-Although demonstrated on transaction data, the broader value of the repository lies in its reusable workflow patterns: structured preprocessing of sequential records, interpretable behavioural feature construction, modular machine learning pipelines, and decision-support outputs in regulated, data-intensive environments.
+Although implemented in a financial context, the broader value of the repository lies in its transferable workflow patterns: structured preprocessing of sequential records, interpretable behavioural feature construction, modular machine learning pipelines, and decision-support outputs in regulated, data-intensive environments.
 
-## Why This Matters
+## Methodological Relevance
 
-Modern institutions operating in regulated settings must convert large volumes of behavioural and operational data into timely, interpretable, and actionable signals. In the CLIS setting, these signals help identify spending patterns, detect behavioural shifts, and support targeted customer interventions. More broadly, the repository illustrates how practical machine learning systems can be organised for monitoring-oriented analytics, early signal extraction, and downstream decision support.
+Although this repository is implemented in a financial-services context, it demonstrates technical patterns that are relevant to other data-intensive and regulated environments. These include:
 
-## Current Workflow
+- end-to-end pipeline construction for sequential and behavioural data
+- transformation of raw records into interpretable features for downstream modelling
+- modular machine learning workflows for risk-oriented analytics
+- production of structured outputs that can support monitoring and intervention decisions
+- practical emphasis on data quality, interpretability, and responsible use
 
-The refactored workflow currently follows this sequence:
+The project should therefore be understood primarily as a demonstration of modular applied machine learning and behavioural analytics capability, rather than as a domain-specific production system.
+
+## Current Refactored Workflow
+
+The repository currently follows this sequence:
 
 1. **Preprocessing**
-   - Validate schema and required columns
-   - Remove invalid, duplicate, or incomplete records
-   - Standardise account identifiers and timestamps
-   - Construct a unified `Datetime` field
-   - Extract consumer-initiated spending transactions
+   - validate schema and required columns
+   - remove invalid, duplicate, or incomplete records
+   - standardise account identifiers and timestamps
+   - construct a unified `Datetime` field
+   - extract consumer-initiated spending transactions
 
 2. **Exploratory Data Analysis**
-   - Generate paper-style descriptive figures
-   - Summarise spending by category
-   - Summarise transaction frequency by category
-   - Visualise the filtered transaction amount distribution
+   - generate descriptive figures aligned with the project write-up
+   - summarise spending by category
+   - summarise transaction frequency by category
+   - visualise filtered transaction amount distributions
 
 3. **Transaction Categorisation**
-   - Apply merchant-to-category mapping rules to construct labelled expenditure data
-   - Build a categorized transaction dataset for downstream use
-   - Provide an optional Random Forest categorization experiment using merchant, amount, balance, and temporal features
+   - construct merchant-derived expenditure labels
+   - build a categorized transaction dataset for downstream modules
+   - provide an optional Random Forest categorisation experiment based on merchant, amount, balance, and temporal features
 
-4. **Downstream Modules**
-   - Churn modelling
-   - Customer segmentation
-   - Recommendation and intervention logic
+4. **Churn Modelling**
+   - build rolling 3-month behavioural features
+   - derive churn labels from activity and recency rules
+   - train and evaluate an XGBoost churn model
+   - generate probability-based churn predictions
 
-The repository is being cleaned so that each stage becomes a clearer, more reproducible module in the overall pipeline.
+5. **Customer Segmentation**
+   - engineer account-level behavioural features
+   - combine numeric behaviour with merchant-text features
+   - evaluate candidate cluster counts
+   - fit KMeans customer segments
+   - generate a prototype segment-level offer assignment
 
-## Current Implemented Components
+6. **Recommendation / Intervention Layer**
+   - currently represented by prototype offer-assignment logic
+   - intended to be further separated into a clearer downstream recommendation module
 
-### 1. Data Preprocessing
-The preprocessing module handles core validation and cleaning operations, including:
-- required-column checks
-- date, time, and account-format validation
-- null and duplicate removal
-- account normalisation
-- chronological sorting
+## Implemented Modules
+
+### 1. Data Module (`src/clis/data/`)
+Handles:
+- transaction preprocessing
 - consumer-spending extraction
+- EDA figure generation
 
-### 2. Exploratory Analysis
-The EDA module produces descriptive outputs aligned with the project write-up, including:
-- total spending by category
-- transaction frequency by category
-- filtered transaction amount distribution
+### 2. Categorisation Module (`src/clis/categorization/`)
+Handles:
+- merchant-to-category mapping
+- labeled transaction preparation
+- optional Random Forest categorisation experiment
+- category prediction outputs
 
-### 3. Transaction Categorisation
-The categorization module currently includes:
-- a reusable merchant-to-category mapping table
-- categorized dataset preparation
-- an optional supervised categorization experiment using Random Forest
+### 3. Churn Module (`src/clis/churn/`)
+Handles:
+- rolling-window feature and label generation
+- XGBoost training and evaluation
+- churn model wrapping
+- churn prediction output generation
 
-The rule-based mapping is the primary source of expenditure labels. The model-based categorization stage should be understood as a supplementary learned approximation of those merchant-derived labels rather than as a fully independent ground-truth categorization system.
+### 4. Segmentation Module (`src/clis/segmentation/`)
+Handles:
+- customer-level feature engineering
+- cluster-count evaluation
+- KMeans segmentation
+- prototype segment-based offer assignment
+
+### 5. Recommendation Module (`src/clis/recommendation/`)
+Reserved for a cleaner downstream recommendation module as the current prototype logic is separated further.
+
+## Detailed Workflow Diagrams
+
+### Churn Modelling Workflow
+
+This workflow covers the end-to-end churn pipeline, from cleaned transaction records to final XGBoost-based churn inference.
+
+![Churn Workflow](./docs/workflow_churn.png)
+
+**Main stages**
+- Data Preprocessing
+- Filter Valid Transactions
+- Monthly Feature Extraction
+- 3-Month Rolling Feature Construction
+- Stable User Filtering
+- Calculate 3-Month Overall Averages
+- Churn Label Assignment
+- Model Training (XGBoost)
+- XGBoost Model Inference
+
+### Customer Segmentation Workflow
+
+This workflow covers the segmentation pipeline used to transform categorized transaction behaviour into customer groups and downstream cashback-design logic.
+
+![Segmentation Workflow](./docs/workflow_segmentation.png)
+
+**Main stages**
+- Load and Filter Transaction Data
+- Preprocess Data
+- Feature Engineering
+- Aggregate User Profiles
+- Feature Vector Construction
+- Cluster Optimization
+- Customer Segmentation
+- Cashback Offer Design
+- Personalized Offer Recommendation
+
+### Recommendation / Association Workflow
+
+This workflow represents the association-rule-driven recommendation path, where merchant patterns are transformed into lookup rules and then into personalized offer recommendations.
+
+![Recommendation Workflow](./docs/workflow_recommendation.png)
+
+**Main stages**
+- Load and Filter Transaction Data
+- Encode Merchants
+- Build Basket Matrix
+- Discover Patterns (Apriori + Rules)
+- Prepare Association Lookup Table
+- Identify Top Merchants per User/Month
+- Decode Top Merchants
+- Generate Personalized Receipts / Categories Recommendations
+- Personalized Offer Recommendation
 
 ## Repository Structure
 
 - `docs/` workflow figures and supporting project notes
 - `data/raw/` raw input data placeholders
-- `data/processed/` processed and categorized transaction tables
+- `data/processed/` processed transaction, churn, and segmentation tables
 - `notebooks/` exploratory notebooks retained for reference
-- `outputs/figures/` generated visualisations
-- `outputs/metrics/` evaluation reports
-- `outputs/predictions/` predicted outputs from downstream modules
+- `outputs/figures/` generated visualisations for EDA, categorisation, churn, and segmentation
+- `outputs/metrics/` evaluation reports and clustering score outputs
+- `outputs/models/` saved model files generated locally
+- `outputs/predictions/` predicted outputs from categorisation, churn, and segmentation steps
 - `src/clis/data/` preprocessing and EDA
-- `src/clis/categorization/` category mapping, labeled dataset preparation, and optional RF categorization
-- `src/clis/churn/` churn-related components under refactoring
-- `src/clis/segmentation/` segmentation-related components under refactoring
-- `src/clis/recommendation/` recommendation-related components under refactoring
+- `src/clis/categorization/` category mapping and categorisation pipeline
+- `src/clis/churn/` churn feature engineering, model training, and prediction
+- `src/clis/segmentation/` customer feature engineering, clustering, and prototype offer assignment
+- `src/clis/recommendation/` reserved for a cleaner downstream recommendation module
 - `scripts/` helper scripts and notebook exports
 - `reports/` report materials and supporting writeups
+
+## Current Status
+
+The repository has been substantially cleaned into a staged workflow with reusable modules for:
+- preprocessing
+- EDA
+- categorisation
+- churn
+- segmentation
+
+The dedicated recommendation layer remains lighter than the other modules and is currently represented by prototype segment-level offer assignment rather than a fully independent recommendation engine.
+
+## Methodological Notes
+
+This project demonstrates transferable technical capability in:
+- preprocessing raw sequential records
+- constructing interpretable behavioural features
+- training modular ML components for categorisation and churn
+- unsupervised customer segmentation
+- producing structured outputs for downstream decision support
+
+The categorisation stage should be interpreted carefully: merchant-derived rules are the primary source of expenditure labels, and the supervised categorisation experiment should be treated as a learned approximation of those labels rather than as a fully independent ground-truth classification system.
+
+Similarly, the current offer-assignment stage should be understood as a prototype segmentation-based intervention layer rather than a mature personalised recommendation system.
 
 ## Responsible Use
 
 This repository is intended as a research and engineering prototype. Any real-world deployment should account for privacy, data governance, explainability, fairness, auditability, and appropriate human oversight. Predictive and behavioural outputs should not be used in isolation for consequential decision-making.
 
-## Methodological Relevance
-
-This repository demonstrates transferable technical capability in:
-- structured preprocessing of raw sequential transaction records
-- behavioural feature extraction
-- interpretable descriptive analytics
-- modular machine learning workflow design
-- decision-support-oriented output generation
-
-While implemented in a financial-services context, these workflow patterns are relevant to broader monitoring, early risk-identification, and decision-support tasks across other data-intensive and regulated domains.
-
 ## Notes
 
 - Raw proprietary or sensitive data are not included in this repository.
 - Large trained model binaries should not be version-controlled in GitHub.
-- The repository should be understood as a modular applied machine learning prototype and refactoring effort rather than a production deployment.
+- Empty placeholder folders can be removed and recreated later if needed.
+- Save the three workflow images into `docs/` as:
+  - `workflow_churn.png`
+  - `workflow_segmentation.png`
+  - `workflow_recommendation.png`
+- If you use different filenames, update the image paths in this README accordingly.
+- This repository should be understood as a modular applied machine learning prototype and refactoring effort rather than a production deployment.
