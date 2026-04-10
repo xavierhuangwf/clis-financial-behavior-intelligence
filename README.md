@@ -188,18 +188,3 @@ The categorisation stage should be interpreted carefully: merchant-derived rules
 
 Similarly, the current offer-assignment stage should be understood as a prototype segmentation-based intervention layer rather than a mature personalised recommendation system.
 
-## Responsible Use
-
-This repository is intended as a research and engineering prototype. Any real-world deployment should account for privacy, data governance, explainability, fairness, auditability, and appropriate human oversight. Predictive and behavioural outputs should not be used in isolation for consequential decision-making.
-
-## Notes
-
-- Raw proprietary or sensitive data are not included in this repository.
-- Large trained model binaries should not be version-controlled in GitHub.
-- Empty placeholder folders can be removed and recreated later if needed.
-- Save the three workflow images into `docs/` as:
-  - `workflow_churn.png`
-  - `workflow_segmentation.png`
-  - `workflow_recommendation.png`
-- If you use different filenames, update the image paths in this README accordingly.
-- This repository should be understood as a modular applied machine learning prototype and refactoring effort rather than a production deployment.
